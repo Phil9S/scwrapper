@@ -46,9 +46,14 @@ for arg in "$@"; do
 		echo -e " -m  | --manifest		String or tsv file		Manifest file or Manfiest ID corresponding to dataset to download"
 		echo -e " -t  | --token			String or text file		Token ID or file containing token ID"
 		echo -e " -p  | --profile 		String				Download profile (Only collab implemented)"
-		echo -e " -r  | --root			Directory (writable)		Root download directory (Default: ${ROOT_DIR})\n"
-		echo -e " --force			Flag				Force re-downloading of local files which exist already"
-		echo -e " --keep			Flag				Keep full files after batch downloading"
+		echo -e " -r  | --root			Directory (writable)		Root download directory (Default: ${ROOT_DIR})"
+		echo -e " -sd | --sum_dir		Directory (writable)		A directory for the download summary file - Updated per batch"
+		echo -e " -sn | --sum_name		String				Name for the summary file - useful for batch scripts"
+		echo -e "\n"
+		echo -e " Flags"
+		echo -e " --force                       Flag                            Force re-downloading of local files which exist already"
+                echo -e " --keep                        Flag                            Keep full files after batch downloading"
+		echo -e "\n"
 		echo -e " Batching options"
 		echo -e " -b  | --batch			String				Batch file downloads into discrete batches"
 		echo -e "				- "NONE" 				No batching is performed. All files downloaded and retained"
@@ -56,10 +61,10 @@ for arg in "$@"; do
 		echo -e "				- "SIZE"				Files are batched in N batchs up to a cummulative file size limit"
 		echo -e " -bn | --batch_num		String OR int			A filesize string (e.g 1.5Tb or 500MB) or an integer for number of batches"
 		echo -e " -bs | --batch_script		String				A post download script command to run - e.g. snakemake or bash command line"
-		echo -e " -h  | --help    	      	Flag				This help documentation\n"
-		
-		echo -e "Dev only"
-		echo -e " --temp                	Flag				Retain temp files (DEBUGGING)"
+		echo -e " -h  | --help    	      	Flag				This help documentation"
+		echo -e "\n"
+		echo -e " Dev only"
+		echo -e " --temp				Flag				Retain temp files (DEBUGGING)"
 		exit 0
 	fi
 done
@@ -117,6 +122,14 @@ while [[ $# > 1 ]]
 		BATCH_SCRIPT=$2
 		shift
 		;;
+		-sd|--sum_dir)
+                SUM_DIR=$2
+                shift
+                ;;
+		-sn|--sum_name)
+                SUM_NAME=$2
+                shift
+                ;;
 	esac
 	shift
 done

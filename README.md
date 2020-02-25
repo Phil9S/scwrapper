@@ -1,7 +1,7 @@
 # scwrapper
 
 A shell script for the [score-client](https://hub.docker.com/r/overture/score/)
-container image to provide an structured download tree, download logging,
+container image to provide an structured directory tree, download logging,
 parameter checks, and batch download options.
 
 ## Quick start
@@ -22,9 +22,9 @@ can be downloaded into the directory `data/` using the following:
 ```
 Files will be downloaded using the `score-client` docker image into the `data/`
 directory into a directory called `bulk`. After which a symlink-driven directory
-tree is built following a project-by-filetype scheme.
+tree is built following a project-by-filetype scheme (see [this](#bulk-downloads-and-directory-structure) section.
 
-See [documentation](#documentation) and [examples](#examples) for more information.
+See [documentation](#documentation) and [examples](#real-world-example) for more information.
 
 ## Documentation
 ### Requirements
@@ -57,8 +57,13 @@ the token on the command line.
 
 For the `--manifest` option this string can be provided as-is or, alternatively,
 the manifest file can be downloaded and passed as the argument. Note that only a
-decompressed, unpacked `tsv` file can be passed, as the compressed tarball can
-contain multiple manifest files.
+decompressed, unpacked `tsv` file can be passed, as the compressed tarball from ICGC
+can contain multiple manifest files.
+
+#### Scope limitation
+
+Because of how ICGC data is managed and organised, this wrapper will only download data from the "collaboratory" repository.
+Attempts to download data from repositories outside of that scope will result in download failures and errors.
 
 ### Script options
 
@@ -98,13 +103,13 @@ __Key__
 ### Bulk downloads and directory structure
 
 Bulk downloads are easy to perform provided an access token is available and a
-dataset is selected (see [Quick start](#quick-start)). As well as downloading the
+dataset is selected (see [quick start](#quick-start)). As well as downloading the
 specified files, `scwrapper.sh` also generates a directory tree to organise and
 maintain downloaded data whilst allowing for easy reading, sub-setting, and searching.
 
-A directory tree for the associated cancer project and file type is generated.
-For each file downloaded, a symlink is placed in the appropriate directory
-(as well as any associated indices), and symlinks are validated for both name and target integrity.
+A directory tree is generated for the associated cancer project and file type and, for 
+each file downloaded, a symlink is placed in the appropriate directory
+(as well as any associated indices). Symlinks are validated for both name and target integrity.
 
 By default, `score-client` will not re-download files which already exist but
 `scwrapper.sh` will peformed file and symlink validation again to make sure no
@@ -119,7 +124,7 @@ Lastly, each process is logged by both the `scwrapper.sh` script and `score-clie
 to maintain a record of the download process and which files were downloaded.
 These files are written to a submission-specific `log` directory which contains
 the logging from the `scwrapper.sh` script, `score-client` image logs, and a `file_summary.txt`
-for all the files associated with that script execution.
+for all the files associated with that specific script execution.
 
 **Example directory tree**
 ```sh
@@ -167,8 +172,8 @@ to stop batching at file sizes less than the largest single file and with more b
 than files in the manifest.
 
 In the example below, files contained with the manifest file are batched so that
-each batch of files has a total size no greater than 5 terabytes. Each batch is then
-downloaded subsequently.
+each batch of files has a total size no greater than 5 terabytes, each batch is then
+downloaded sequentially.
 
 **Example of batching**
 ```sh
@@ -181,18 +186,19 @@ downloaded subsequently.
 ```
 
 By default, after a batch is complete the downloaded file is [truncated](http://man7.org/linux/man-pages/man1/truncate.1.html)
-to a size of zero bytes, so file continuity is not lost and tracking can continue.
+to a size of zero bytes, so file continuity is not lost and file tracking can be maintained. Warnings are issues if empty files are
+passed to a batch script, as this may or may not be intended behaviour depending on user requirements.
 
 ### Batch scripts
 
 Batching on its own is not very helpful as the files are downloaded and then immediately
-"deleted" or using the `--keep` option, which ends up functioning identically to a bulk
-download but with additional intermediate steps.
+"deleted" or, using the `--keep` option, ends up functioning identically to a bulk
+download but with additional redundant intermediate steps.
 
 The use of the `-bs` or `--batch_script` option is what makes batching worthwhile.
 The argument provided to `-bs` can be any command (or series of commands or scripts)
 which can run on the terminal. After a batch has been downloaded, the `batch_script`
-is executed and upon completion, the batch downloads are removed and the next batch
+is executed and upon completion, the batch download files are removed and the next batch
 downloaded.
 
 The `scwrapper.sh` script generates a summary file, similar to those in the main
@@ -200,7 +206,9 @@ directory tree, but its location and name can be specified (`-sd` or `--sum_dir`
 `-sn` or `--sum_name`). In combination with the `batch_script`, this file can be used
 to perform downstream analysis on each batch before removing the input files and
 starting a new batch. The summary file in this instance is updated each batch to contain
-both the current and previous batch information (be careful of duplicating analyses).
+both the current and previous batch information. It is worth being careful to not duplicate
+analyses as previously run batches are still present in the summary file. A simple fix is to 
+skip empty files in the script given by `-bs` or use a workflow manager.
 
 **Example of batch scripts**
 ```sh
@@ -209,9 +217,9 @@ both the current and previous batch information (be careful of duplicating analy
                        -m 1eb7ef06-ac99-a4a4-8a4b-2b9285acc7a0  \
                        -t f95ba6e3-2fae-f46a-1bd4-84b5b02dd392 \
                        -b SIZE \
-                       -bn 5Mb
-                       -sd $HOME/
-                       -sn summaryfile.txt
+                       -bn 5Mb \
+                       -sd $HOME/ \
+                       -sn summaryfile.txt \
                        -bs "cat $HOME/summaryfile.txt | xargs -n1 -I {} wc -l {}"
 ```
 
@@ -220,12 +228,13 @@ each batch, run the batch script. In this case the batch script counts the lines
 each file, but implementing calls to larger pipelines and analysis tools should be relatively
 straight forward from the summaryfile.txt.
 
-### Real world examples
+### Real world example
 
 Downloading BAM files for downstream analysis using [snakemake](https://snakemake.readthedocs.io/en/stable/).
-In this case, hard disk space is limited on the cluster environment and `snakemake`
+
+In this case, hard disk space is limited on our cluster environment and `snakemake`
 does not provide easily implemented size batching. Here, we can download BAM files in size-limited
-batches and run the required `snakemake` pipeline from the summary file on a job controlled cluster.
+batches and run the required `snakemake` pipeline from the summary file on a SLURM controlled cluster.
 
 ```sh
 # Using a manifest token/id
@@ -233,9 +242,9 @@ batches and run the required `snakemake` pipeline from the summary file on a job
                        -m 1eb7ef06-ac99-a4a4-8a4b-2b9285acc7a0  \
                        -t f95ba6e3-2fae-f46a-1bd4-84b5b02dd392 \
                        -b SIZE \
-                       -bn 5Mb
-                       -sd ${HOME}/
-                       -sn summaryfile.txt
+                       -bn 5Mb \
+                       -sd ${HOME}/ \
+                       -sn summaryfile.txt \
                        -bs "snakemake --config samplesheet=summaryfile.txt --cluster sbatch"
 ```
 

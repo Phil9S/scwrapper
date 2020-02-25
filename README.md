@@ -22,7 +22,7 @@ can be downloaded into the directory `data/` using the following:
 ```
 Files will be downloaded using the `score-client` docker image into the `data/`
 directory into a directory called `bulk`. After which a symlink-driven directory
-tree is built following a project-by-filetype scheme (see [this](#bulk-downloads-and-directory-structure) section.
+tree is built following a project-by-filetype scheme (see [this](#bulk-downloads-and-directory-structure) section).
 
 See [documentation](#documentation) and [examples](#real-world-example) for more information.
 

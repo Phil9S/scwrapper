@@ -43,7 +43,7 @@ for arg in "$@"; do
         if [[ "$arg" == "-h" ]] || [[ "$arg" == "--help" ]]; then
 		echo -e "\n${ECHO}[`date "+%H:%M:%S"`] Help documentation\n"
 		echo -e " Options			Value				Description"
-		echo -e " -m  | --manifest		String or tsv file		Manifest file or Manfiest ID corresponding to dataset to download"
+		echo -e " -m  | --manifest		String or tsv file		Manifest file or Manifest ID corresponding to dataset to download"
 		echo -e " -t  | --token			String or text file		Token ID or file containing token ID"
 		echo -e " -p  | --profile 		String				Download profile (Only collab implemented)"
 		echo -e " -r  | --root			Directory (writable)		Root download directory (Default: ${ROOT_DIR})"
@@ -57,8 +57,8 @@ for arg in "$@"; do
 		echo -e " Batching options"
 		echo -e " -b  | --batch			String				Batch file downloads into discrete batches"
 		echo -e "				- "NONE" 				No batching is performed. All files downloaded and retained"
-		echo -e "				- "FILE"				Files are batched into N number of batchs"
-		echo -e "				- "SIZE"				Files are batched in N batchs up to a cummulative file size limit"
+		echo -e "				- "FILE"				Files are batched into N number of batches"
+		echo -e "				- "SIZE"				Files are batched in N batches up to a cumulative file size limit"
 		echo -e " -bn | --batch_num		String OR int			A filesize string (e.g 1.5Tb or 500MB) or an integer for number of batches"
 		echo -e " -bs | --batch_script		String				A post download script command to run - e.g. snakemake or bash command line"
 		echo -e " -h  | --help    	      	Flag				This help documentation"
@@ -157,6 +157,13 @@ if ! [ -w "${PWD}" ]; then
         exit 1
 fi
 
+## Check summary file dir is writable
+if ! [ -w "${SUM_DIR}" ]; then
+        echo -e "${ECHO}[`date "+%H:%M:%S"`] Summary file directory not writable"
+        exit 1
+fi
+
+
 ## Profile check - only collab supported currently
 if [ "${PROFILE}" != "collab" ]; then
 	echo -e "${ECHO}[`date "+%H:%M:%S"`] Profiles other than "collab" are not currently supported"
@@ -164,6 +171,26 @@ if [ "${PROFILE}" != "collab" ]; then
 	echo -e "${ECHO}[`date "+%H:%M:%S"`] EGA downloads require use of the EGA client"
 	exit 1
 fi
+
+
+## Clean up temp folders and files function
+clean_up(){
+if [ "${TEMP}" == "TRUE" ]; then
+        if [ -f "${PWD}/.temp_manifest.file" ]; then
+                rm ${PWD}/.temp_manifest.file
+        fi
+
+        if [ -f "${ROOT_DIR}.temp/chunks.list" ]; then
+                while read -r LINE; do
+                        rm ${LINE}
+                done < ${ROOT_DIR}.temp/chunks.list
+                rm ${ROOT_DIR}.temp/chunks.list
+        fi
+        if [ -d ${ROOT_DIR}.temp/ ]; then
+                rm -r ${ROOT_DIR}.temp/
+        fi
+fi
+}
 
 # Generate primary working dirs
 if ! [ -d "${ROOT_DIR}bulk/" ]; then
@@ -183,11 +210,13 @@ fi
 ## Check token is valid - from file or string
 if [ "${TOKEN}" == "NULL" ]; then
 	echo -e "${ECHO}[`date "+%H:%M:%S"`] No token provided"
+	clean_up
 	exit 1
 else
 	if ! [ -f "${TOKEN}" ]; then
 		if grep -v -q -P ${ID_PATTERN} <(echo "${TOKEN}"); then
 			echo -e "${ECHO}[`date "+%H:%M:%S"`] Invalid Token id format or not found"
+			clean_up
 			exit 1
 		fi
 	else
@@ -195,12 +224,14 @@ else
 		if (( ${TOKEN_LENGTH} != 1 )); then
 			echo -e "${ECHO}[`date "+%H:%M:%S"`] Token file contains more than one line"
 			echo -e "${ECHO}[`date "+%H:%M:%S"`] Please provide token in file with single line"
+			clean_up
 			exit 1
 		else
 			TOKEN=$(cat ${TOKEN})
 			if grep -v -q -P ${ID_PATTERN} <(echo "${TOKEN}"); then
                         	echo -e "${ECHO}[`date "+%H:%M:%S"`] Invalid Token id format"
-                        	exit 1
+                        	clean_up
+				exit 1
                 	fi
 		fi
 	fi
@@ -209,6 +240,7 @@ fi
 ## Check manifest is provided
 if [ "${MANIFEST}" == "NULL" ]; then
 	echo -e "${ECHO}[`date "+%H:%M:%S"`] Manifest file or id was not provided"
+	clean_up
 	exit 1
 else
 ## Check manifest is either file or id | Check file is valid
@@ -226,23 +258,27 @@ else
 			#MANIFEST="${PWD}/.temp_manifest.file"
 		else
 			echo -e "${ECHO}[`date "+%H:%M:%S"`] Invalid manifest id format"
+			clean_up
 			exit 1
 		fi
 	else
 		if grep -q ".tar.gz" <(echo ${MANIFEST}); then
 			echo -e "${ECHO}[`date "+%H:%M:%S"`] Manifest is likely compressed tarball"
 			echo -e "${ECHO}[`date "+%H:%M:%S"`] Please uncompress and unpack first"
+			clean_up
 			exit 1
 		fi
 		if grep -q -P "^/mnt/.*" <(echo "${MANIFEST}"); then
 			echo -e "${ECHO}[`date "+%H:%M:%S"`] Manifest file is absolute from /mnt/"
 			echo -e "${ECHO}[`date "+%H:%M:%S"`] Unknown score-client manifest read failures occur using absolute paths to files including the root"
 			echo -e "${ECHO}[`date "+%H:%M:%S"`] Use an relative path or put the manifest in the same working dir as the script"
+			clean_up
 			exit 1
 		fi
 		MANIFEST_COUNTS=$(head -n1 ${MANIFEST} | tr "\t" "\n" | wc -l)
 		if (( ${MANIFEST_FIELDS} != ${MANIFEST_COUNTS} )); then
 			echo -e "${ECHO}[`date "+%H:%M:%S"`] Manifest has wrong number of fields"
+			clean_up
 			exit 1
 		fi
 	fi
@@ -260,16 +296,20 @@ MAX_FILE_NUMBER=$(cat ${MANIFEST_NOHEAD} | wc -l)
 if [ "${BATCH}" != "NONE" ] && [ "${BATCH}" != "SIZE" ] && [ "${BATCH}" != "FILE" ]; then
         echo -e "${ECHO}[`date "+%H:%M:%S"`] Invalid batch variable give (${BATCH})"
         echo -e "${ECHO}[`date "+%H:%M:%S"`] Batch should be either SIZE, FILE, or NONE"
+	clean_up
         exit 1
 elif [ "${BATCH}" == "FILE" ]; then 
 	if [[ ! ${BATCH_NUMBER} =~ ${INTEGER_CHECK} ]]; then
         	echo -e "${ECHO}[`date "+%H:%M:%S"`] Batching by file requires an integer value as input"
-        	exit 1
+        	clean_up
+		exit 1
 	elif [ "${BATCH_NUMBER}" -gt 9 ]; then
 		echo -e "${ECHO}[`date "+%H:%M:%S"`] Batching by file is limited to 9 batches - Use size batching for better batch control"
+		clean_up
 		exit 1
 	elif [ "${BATCH_NUMBER}" -gt "${MAX_FILE_NUMBER}" ]; then
 		echo -e "${ECHO}[`date "+%H:%M:%S"`] Number of batches exceeds the number of primary files to be downloaded"
+		clean_up
 		exit 1
 	fi
 elif [ "${BATCH}" == "SIZE" ]; then
@@ -297,6 +337,7 @@ elif [ "${BATCH}" == "SIZE" ]; then
                 fi
                 if [ "${BATCH_NUMBER}" -lt "${MAX_FILE_SIZE}" ]; then
 			echo -e "${ECHO}[`date "+%H:%M:%S"`] Batch size is smaller than the single largest file (${MAX_FILE_SIZE})"
+			clean_up
 			exit 1
 		fi
         fi
@@ -536,16 +577,4 @@ else
 fi
 
 ## Clean up temp folders and files
-if [ "${TEMP}" == "TRUE" ]; then
-	if [ -f "${PWD}/.temp_manifest.file" ]; then
-		rm ${PWD}/.temp_manifest.file
-	fi
-
-	if [ -f "${ROOT_DIR}.temp/chunks.list" ]; then
-		while read -r LINE; do
-			rm ${LINE}
-		done < ${ROOT_DIR}.temp/chunks.list
-		rm ${ROOT_DIR}.temp/chunks.list
-	fi
-	rm -r ${ROOT_DIR}.temp/
-fi
+clean_up

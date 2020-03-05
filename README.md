@@ -17,7 +17,7 @@ can be downloaded into the directory `data/` using the following:
 
 # Using a manifest token/id
 ./score-client-wrapper -r data/ \
-                       -m 1eb7ef06-ac99-a4a4-8a4b-2b9285acc7a0  \
+                       -m 1eb7ef06-ac99-a4a4-8a4b-2b9285acc7a0 \
                        -t f95ba6e3-2fae-f46a-1bd4-84b5b02dd392
 ```
 Files will be downloaded using the `score-client` docker image into the `data/`
@@ -112,11 +112,11 @@ each file downloaded, a symlink is placed in the appropriate directory
 (as well as any associated indices). Symlinks are validated for both name and target integrity.
 
 By default, `score-client` will not re-download files which already exist but
-`scwrapper.sh` will peformed file and symlink validation again to make sure no
+`scwrapper.sh` will perform file and symlink validation again to make sure no
 files were changed or renamed. The `--force` flag can be used to enforce re-downloading
 of files regardless of if they have been downloaded previously.
 
-Additionally a `file_summary.txt` for each file type, project, and all downloaded files
+Additionally a `file_summary.txt` for each file type-per-project and all downloaded files
 is generated and these files are updated on-the-fly when additional files are
 downloaded to keep track of all files and their location.
 
@@ -138,7 +138,6 @@ for all the files associated with that specific script execution.
 │       ├── client.log
 │       └── scwrapper.log
 ├── BTCA-SG
-│   ├── file_summary.txt
 │   ├── VCF
 │   │   ├── file_summary.txt
 │   │   └── {symlinks to bulk}
@@ -146,7 +145,6 @@ for all the files associated with that specific script execution.
 │       ├── file_summary.txt
 │       └── {symlinks to bulk}
 └── RECA-EU
-    ├── file_summary.txt
     └── VCF
         ├── file_summary.txt
         └── {symlinks to bulk}
@@ -193,11 +191,11 @@ passed to a batch script, as this may or may not be intended behaviour depending
 
 Batching on its own is not very helpful as the files are downloaded and then immediately
 "deleted" or, using the `--keep` option, ends up functioning identically to a bulk
-download but with additional redundant intermediate steps.
+download but with redundant intermediate steps.
 
 The use of the `-bs` or `--batch_script` option is what makes batching worthwhile.
 The argument provided to `-bs` can be any command (or series of commands or scripts)
-which can run on the terminal. After a batch has been downloaded, the `batch_script`
+which can run on the command line. After a batch has been downloaded, the `batch_script`
 is executed and upon completion, the batch download files are removed and the next batch
 downloaded.
 

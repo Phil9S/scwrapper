@@ -253,9 +253,13 @@ else
         		--bind ${LOG_DIR}:/score-client/logs/,${ROOT_DIR}bulk/:/data docker://overture/score score-client \
         		--profile ${PROFILE} \
 			manifest --manifest ${MANIFEST} > ${PWD}/.temp_manifest.file
-			echo -e "\n"
-			MANIFEST=".temp_manifest.file"
-			#MANIFEST="${PWD}/.temp_manifest.file"
+			MANIFEST="${PWD}/.temp_manifest.file"
+			if ! [ -s "${MANIFEST}" ]; then
+				echo -e "${ECHO}[`date "+%H:%M:%S"`] Get manifest failed"
+				echo -e "${ECHO}[`date "+%H:%M:%S"`] Re-running should resolve the issue"
+				clean_up
+				exit 1
+			fi
 		else
 			echo -e "${ECHO}[`date "+%H:%M:%S"`] Invalid manifest id format"
 			clean_up
@@ -449,43 +453,77 @@ score_download(){
 	done < ${ROOT_DIR}.temp/symlinks.list
 	
 	## Summary files for Project/File folders
+	## Use ICGC api to retrieve file information
+	echo -e "${ECHO}[`date "+%H:%M:%S"`] Getting file metadata using ICGC API" | tee -a ${LOG_FILE}
+	FILES=$(cut -f2 "${MANIFEST}" \
+			| grep -v "file" \
+			| sed 's/\(\S\+\)/%22\1%22/g' \
+			| tr "\n" "," \
+			| sed 's/,/%2C/g' \
+			| sed 's/%2C$//')
+	wget --quiet -O - "$(echo "https://dcc.icgc.org/api/v1/repository/files/export?filters=%7B%22file%22%3A%7B%22id%22%3A%7B%22is%22%3A%5B${FILES}%5D%7D%7D%7D&type=tsv%0A")" \
+	| grep -v "File" \
+	| sort -V -k2,2 > ${ROOT_DIR}.temp/api_data.txt
+	
+	API_HEADER="File_ID\tAccess\tFile_ID\tObject_ID\tFile_Name\tICGC_Donor\tSpecimen_ID\tSpecimen_Type\tSample_ID\tRepository\tProject_Study\tData_Type\tExperimental_Strategy\tFormat\tSize_(bytes)\tFile"
+	echo -e "${ECHO}[`date "+%H:%M:%S"`] Generating summary files" | tee -a ${LOG_FILE}
+	## Generate summary files
 	while read -r LINE; do
 	        PROJECT=$(echo "${LINE}" | cut -f1)
                 FILE_TYPE=$(echo "${LINE}" | cut -f2)
-		## Root dir summary
-		grep -v "file" "${MANIFEST}" | grep "${PROJECT}" \
+		##Root dir summary
+		grep -i -v "file" ${ROOT_DIR}.temp/api_data.txt \
+			| grep ${PROJECT} \
+			| grep ${FILE_TYPE} \
+			| sort -V -k2,2 > ${ROOT_DIR}.temp/.api_data.txt 
+		grep -i -v "file" "${MANIFEST}" | grep "${PROJECT}" \
                         | grep "${FILE_TYPE}" \
-                        | cut -f4,5,9,10 \
-                        | awk -F '\t' -v dir="${ROOT_DIR}${PROJECT}/${FILE_TYPE}/" 'BEGIN{OFS="\t";} {print($3,$4,$1,dir$2)}' >> ${ROOT_DIR}file_summary.txt
-                grep -v "file" ${ROOT_DIR}file_summary.txt | sort -u \
-                        | cat <(echo -e "sample\tproject\tfile_type\tfile") - > ${ROOT_DIR}.file_summary.txt
+                        | cut -f2,5 \
+                        | awk -F '\t' -v dir="${ROOT_DIR}${PROJECT}/${FILE_TYPE}/" 'BEGIN{OFS="\t";} {print($1,dir$2)}' \
+			| sort -V -k1,1 \
+			| join -t $'\t' -1 2 -2 1 ${ROOT_DIR}.temp/.api_data.txt - >> ${ROOT_DIR}file_summary.txt
+		grep -i -v "file" ${ROOT_DIR}file_summary.txt | sort -u \
+                        | cat <(echo -e "${API_HEADER}") - > ${ROOT_DIR}.file_summary.txt
                 mv ${ROOT_DIR}.file_summary.txt ${ROOT_DIR}file_summary.txt
 		## Manifest summary
-		grep -v "file" "${MANIFEST}" | grep "${PROJECT}" \
+		grep -i -v "file" ${ROOT_DIR}.temp/api_data.txt \
+                        | grep ${PROJECT} \
+                        | grep ${FILE_TYPE} \
+                        | sort -V -k2,2 > ${ROOT_DIR}.temp/.api_data.txt
+		grep -i -v "file" "${MANIFEST}" | grep "${PROJECT}" \
                         | grep "${FILE_TYPE}" \
-                        | cut -f4,5,9,10 \
-                        | awk -F '\t' -v dir="${ROOT_DIR}${PROJECT}/${FILE_TYPE}/" 'BEGIN{OFS="\t";} {print($3,$4,$1,dir$2)}' >> ${SUM_DIR}${SUM_NAME}
-		grep -v "file" ${SUM_DIR}${SUM_NAME} | sort -u \
-                	| cat <(echo -e "sample\tproject\tfile_type\tfile") - > ${SUM_DIR}.${SUM_NAME}
+                        | cut -f2,5 \
+                        | awk -F '\t' -v dir="${ROOT_DIR}${PROJECT}/${FILE_TYPE}/" 'BEGIN{OFS="\t";} {print($1,dir$2)}' \
+                        | sort -V -k1,1 \
+                        | join -t $'\t' -1 2 -2 1 ${ROOT_DIR}.temp/.api_data.txt - >> ${SUM_DIR}${SUM_NAME}
+                grep -i -v "file" ${SUM_DIR}${SUM_NAME} | sort -u \
+                        | cat <(echo -e "${API_HEADER}") - > ${SUM_DIR}.${SUM_NAME}
 		mv ${SUM_DIR}.${SUM_NAME} ${SUM_DIR}${SUM_NAME}
-		cp ${SUM_DIR}${SUM_NAME} ${LOG_DIR}
-		## Per project / file type summary files
-		grep -v "file" "${MANIFEST}" | grep "${PROJECT}" \
-			| grep "${FILE_TYPE}" \
-			| cut -f4,5,9,10 \
-			| awk -F '\t' -v dir="${ROOT_DIR}${PROJECT}/${FILE_TYPE}/" 'BEGIN{OFS="\t";} {print($3,$4,$1,dir$2)}' >> \
-			${ROOT_DIR}${PROJECT}/${FILE_TYPE}/file_summary.txt
-		grep -v "file" ${ROOT_DIR}${PROJECT}/${FILE_TYPE}/file_summary.txt \
+                cp ${SUM_DIR}${SUM_NAME} ${LOG_DIR}
+		## Per project/filetype
+		grep -i -v "file" ${ROOT_DIR}.temp/api_data.txt \
+                        | grep ${PROJECT} \
+                        | grep ${FILE_TYPE} \
+                        | sort -V -k2,2 > ${ROOT_DIR}.temp/.api_data.txt
+		grep -i -v "file" "${MANIFEST}" | grep "${PROJECT}" \
+                        | grep "${FILE_TYPE}" \
+                        | cut -f2,5 \
+                        | awk -F '\t' -v dir="${ROOT_DIR}${PROJECT}/${FILE_TYPE}/" 'BEGIN{OFS="\t";} {print($1,dir$2)}' \
+                        | sort -V -k1,1 \
+                        | join -t $'\t' -1 2 -2 1 ${ROOT_DIR}.temp/.api_data.txt - >> ${ROOT_DIR}${PROJECT}/${FILE_TYPE}/file_summary.txt
+                grep -i -v "file" ${ROOT_DIR}${PROJECT}/${FILE_TYPE}/file_summary.txt \
 			| sort -u \
-			| cat <(echo -e "sample\tproject\tfile_type\tfile") - > ${ROOT_DIR}${PROJECT}/${FILE_TYPE}/.file_summary.txt
-		mv ${ROOT_DIR}${PROJECT}/${FILE_TYPE}/.file_summary.txt ${ROOT_DIR}${PROJECT}/${FILE_TYPE}/file_summary.txt
+                        | cat <(echo -e "${API_HEADER}") - > ${ROOT_DIR}${PROJECT}/${FILE_TYPE}/.file_summary.txt
+                mv ${ROOT_DIR}${PROJECT}/${FILE_TYPE}/.file_summary.txt ${ROOT_DIR}${PROJECT}/${FILE_TYPE}/file_summary.txt
 	done < ${ROOT_DIR}.temp/project.list
 
 }
+## No batching block
 if [ "${BATCH}" == "NONE" ]; then
 	echo -e "${ECHO}[`date "+%H:%M:%S"`] score-client running without batching" | tee -a ${LOG_FILE}
 	score_download ${MANIFEST}
 else
+## Batching block
 	if [ "${BATCH}" == "FILE" ]; then
 	echo -e "${ECHO}[`date "+%H:%M:%S"`] score-client running with fixed batch sizes (${BATCH_NUMBER} batches)" | tee -a ${LOG_FILE}
 		## Generate chunks by file count

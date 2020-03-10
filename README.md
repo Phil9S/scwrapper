@@ -60,7 +60,7 @@ the manifest file can be downloaded and passed as the argument. Note that only a
 decompressed, unpacked `tsv` file can be passed, as the compressed tarball from ICGC
 can contain multiple manifest files.
 
-#### Scope limitation
+### Scope limitation
 
 Because of how ICGC data is managed and organised, this wrapper will only download data from the "collaboratory" repository.
 Attempts to download data from repositories outside of that scope will result in download failures and errors.
@@ -69,7 +69,7 @@ Attempts to download data from repositories outside of that scope will result in
 
 Run the following to see the help documentation:
 ```sh
-/score-client-wrapper.sh --help
+./score-client-wrapper.sh --help
 ```
 __Key__
 - **Required options (no defaults)**

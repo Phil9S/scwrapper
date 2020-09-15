@@ -353,7 +353,7 @@ if [ -f "${SUM_DIR}${SUM_NAME}" ]; then
 fi
 
 ## End of variable and parameter checks
-echo -e "${ECHO}[`date "+%H:%M:%S"`] All parameters valid" | tee -a ${LOG_FILE}
+echo -e "\n${ECHO}[`date "+%H:%M:%S"`] All parameters valid" | tee -a ${LOG_FILE}
 echo -e "${ECHO}[`date "+%H:%M:%S"`] Files in download: $(grep -v "file" ${MANIFEST} | wc -l) (${MANIFEST})" | tee -a ${LOG_FILE}
 
 ## Download function
@@ -465,7 +465,7 @@ score_download(){
 	| grep -v "File" \
 	| sort -V -k2,2 > ${ROOT_DIR}.temp/api_data.txt
 	
-	API_HEADER="File_ID\tAccess\tFile_ID\tObject_ID\tFile_Name\tICGC_Donor\tSpecimen_ID\tSpecimen_Type\tSample_ID\tRepository\tProject_Study\tData_Type\tExperimental_Strategy\tFormat\tSize_(bytes)\tFile"
+	API_HEADER="File_ID\tAccess\tObject_ID\tFile_Name\tICGC_Donor\tSpecimen_ID\tSpecimen_Type\tSample_ID\tRepository\tProject_Study\tPCAWG\tData_Type\tExperimental_Strategy\tFormat\tSize_(bytes)\tFile"
 	echo -e "${ECHO}[`date "+%H:%M:%S"`] Generating summary files" | tee -a ${LOG_FILE}
 	## Generate summary files
 	while read -r LINE; do
